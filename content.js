@@ -154,23 +154,36 @@ function logAd(adInfo) {
   });
 }
 
-// Network scanning (still active but less noisy)
+// Network scanning - extract destination URLs from ad networks
 const originalFetch = window.fetch;
 window.fetch = async function(...args) {
   const url = args[0];
-  if (typeof url === 'string' && isAdNetworkUrl(url)) {
-    logAd({
-      url: url,
-      type: 'network-ad',
-      source: 'fetch'
-    });
+  if (typeof url === 'string') {
+    try {
+      const urlObj = new URL(url);
+      
+      // Check for ad networks
+      if (urlObj.hostname.includes('doubleclick.net') || 
+          urlObj.hostname.includes('googleadservices.com') ||
+          urlObj.hostname.includes('googlesyndication.com') ||
+          url.includes('youtube.com/pagead')) {
+        
+        // Extract destination URL from parameters
+        const destUrl = urlObj.searchParams.get('adurl') || 
+                       urlObj.searchParams.get('url') ||
+                       urlObj.searchParams.get('q');
+        
+        if (destUrl) {
+          logAd({
+            url: destUrl,
+            type: 'network-ad',
+            source: 'fetch-extracted'
+          });
+        }
+      }
+    } catch (e) {}
   }
   return originalFetch.apply(this, args);
 };
-
-function isAdNetworkUrl(url) {
-  const adNetworks = ['doubleclick.net', 'googleadservices.com', 'googlesyndication.com', 'youtube.com/pagead'];
-  return adNetworks.some(network => url.includes(network));
-}
 
 observeWhenReady();
