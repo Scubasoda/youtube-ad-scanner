@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { width: 500px; padding: 15px; font-family: system-ui; }
+    h2 { margin: 0 0 10px 0; color: #d93025; font-size: 18px; }
+    .stats { display: flex; gap: 10px; margin-bottom: 15px; }
+    .stat-box { flex: 1; text-align: center; padding: 10px; background: #f8f9fa; border-radius: 5px; }
+    .ad-item { border: 1px solid #dadce0; padding: 10px; margin-bottom: 8px; border-radius: 5px; }
+    .destination-url { 
+      font-size: 14px; 
+      font-family: monospace;
+      color: #1a73e8;
+      word-break: break-all;
+      padding: 5px;
+      background: #f8f9fa;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .meta { font-size: 11px; color: #5f6368; margin-top: 5px; }
+    button { width: 100%; padding: 10px; margin-top: 10px; background: #d93025; color: white; border: none; border-radius: 5px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h2>🛡️ YouTube Ad Scanner</h2>
+  <div class="stats">
+    <div class="stat-box"><div class="stat-value" id="totalAds">0</div><div>Ads</div></div>
+  </div>
+  <div id="adList"></div>
+  <div id="no-ads">No ads detected yet.</div>
+  <button id="clearBtn">Clear Logs</button>
+  <button id="exportBtn">Export</button>
+  <script src="popup.js"></script>
+</body>
+</html>
