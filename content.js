@@ -48,6 +48,21 @@ const AD_CONTAINERS = [
 // Words to EXCLUDE (common UI elements)
 const EXCLUDE_WORDS = ['play', 'plays', 'like', 'likes', 'share', 'save', 'subscribe', 'channel', 'youtube', 'google', 'video', 'watch'];
 
+// Domains to EXCLUDE (Google/YouTube infrastructure)
+const EXCLUDE_DOMAINS = [
+  'youtube.com',
+  'ytimg.com',
+  'ggpht.com',
+  'googleusercontent.com',
+  'googlevideo.com',
+  'gstatic.com',
+  'google.com',
+  'googleapis.com',
+  'doubleclick.net',
+  'googleadservices.com',
+  'googlesyndication.com'
+];
+
 // Valid TLDs for validation - expanded list
 const VALID_TLDS = [
   '.com', '.net', '.org', '.io', '.co', '.au', '.uk', '.ca', '.de', '.fr', 
@@ -195,7 +210,7 @@ function scanVideoPlayer() {
     // Check for click-through links
     const adLinks = player.querySelectorAll('a[href*="adurl"], a[href*="googleadservices"]');
     adLinks.forEach(link => {
-      if (link.href) {
+      if (link.href && !shouldExcludeUrl(link.href)) {
         logAd({
           url: link.href,
           type: 'video-ad',
@@ -239,7 +254,7 @@ function scanContainer(container) {
   
   // Check for data-url attributes
   const dataUrl = container.getAttribute('data-url') || container.getAttribute('data-ad-url');
-  if (dataUrl && !dataUrl.includes('youtube.com')) {
+  if (dataUrl && !shouldExcludeUrl(dataUrl)) {
     logAd({
       url: dataUrl,
       type: 'display-ad',
@@ -252,17 +267,14 @@ function scanContainer(container) {
   const images = container.querySelectorAll('img[src]');
   images.forEach(img => {
     const src = img.src;
-    if (src && !src.includes('youtube.com') && !src.includes('ytimg.com') && !src.includes('ggpht.com')) {
-      try {
-        const url = new URL(src);
-        if (DEBUG) console.log('[SCAM-SCANNER] External image found:', url.hostname);
-        logAd({
-          url: src,
-          type: 'display-ad-image',
-          source: 'image-src'
-        });
-        foundAd = true;
-      } catch (e) {}
+    if (src && !shouldExcludeUrl(src)) {
+      if (DEBUG) console.log('[SCAM-SCANNER] External image found:', src);
+      logAd({
+        url: src,
+        type: 'display-ad-image',
+        source: 'image-src'
+      });
+      foundAd = true;
     }
   });
   
@@ -303,7 +315,7 @@ function scanContainer(container) {
   }
   links && links.forEach(link => {
     if (DEBUG) console.log('[SCAM-SCANNER] Link href:', link.href);
-    if (link.href && !link.href.includes('youtube.com')) {
+    if (link.href && !shouldExcludeUrl(link.href)) {
       if (DEBUG) console.log('[SCAM-SCANNER] Valid external link:', link.href);
       logAd({
         url: link.href,
@@ -380,7 +392,7 @@ window.fetch = async function(...args) {
                        urlObj.searchParams.get('url') ||
                        urlObj.searchParams.get('q');
         
-        if (destUrl) {
+        if (destUrl && !shouldExcludeUrl(destUrl)) {
           logAd({
             url: destUrl,
             type: 'network-ad',
@@ -411,7 +423,7 @@ XMLHttpRequest.prototype.open = function(method, url, ...rest) {
                        urlObj.searchParams.get('url') ||
                        urlObj.searchParams.get('q');
         
-        if (destUrl) {
+        if (destUrl && !shouldExcludeUrl(destUrl)) {
           logAd({
             url: destUrl,
             type: 'network-ad',
