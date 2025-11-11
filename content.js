@@ -1,6 +1,6 @@
 console.log('[SCAM-SCANNER] Focused ad scanner active');
 
-// Only scan these SPECIFIC ad containers
+// Only scan these SPECIFIC ad containers - expanded list
 const AD_CONTAINERS = [
   'ytd-promoted-sparkles-web-renderer',  // Display ads
   'ytd-ad-slot-renderer',                // Banner ads
@@ -9,7 +9,14 @@ const AD_CONTAINERS = [
   '.ytp-ad-player-overlay',              // Overlay ads
   '.ytp-ad-avatar-lockup-card',          // Your example's container
   'ytd-player-ads-overlay',              // Mid-roll ads
-  'ad-slot-renderer'                     // Generic ad slot
+  'ad-slot-renderer',                    // Generic ad slot
+  'ytd-display-ad-renderer',             // Display ad renderer
+  'ytd-promoted-video-renderer',         // Promoted videos
+  'ytd-banner-promo-renderer',           // Banner promos
+  '[id*="ad-"]',                         // Elements with 'ad-' in ID
+  '[class*="-ad-"]',                     // Elements with '-ad-' in class
+  '[class*="ad-container"]',             // Ad container classes
+  'ytd-in-feed-ad-layout-renderer'       // In-feed ads
 ];
 
 // Words to EXCLUDE (common UI elements)
@@ -17,6 +24,9 @@ const EXCLUDE_WORDS = ['play', 'plays', 'like', 'likes', 'share', 'save', 'subsc
 
 // Valid TLDs for validation
 const VALID_TLDS = ['.com', '.net', '.org', '.io', '.co', '.au', '.uk', '.ca', '.de', '.fr', '.it', '.es', '.nl', '.be', '.ch', '.at', '.nz', '.jp', '.in'];
+
+// Track scanned containers with timestamp to allow rescanning
+const scannedContainers = new WeakMap();
 
 function observeWhenReady() {
   if (document.body) {
@@ -32,6 +42,11 @@ function startFocusedScanning() {
   // Scan ad containers immediately
   scanAdContainers();
   
+  // Periodic full rescan every 5 seconds to catch missed ads
+  setInterval(() => {
+    scanAdContainers();
+  }, 5000);
+  
   // Watch for new ad containers
   const observer = new MutationObserver((mutations) => {
     mutations.forEach(mutation => {
@@ -39,20 +54,37 @@ function startFocusedScanning() {
         if (node.nodeType === 1) {
           // Check if the added node ITSELF is an ad container
           if (isAdContainer(node)) {
-            scanContainer(node);
+            // Delay scan slightly to ensure content is loaded
+            setTimeout(() => scanContainer(node), 100);
           }
           // Or if it contains ad containers
           AD_CONTAINERS.forEach(selector => {
             try {
-              node.querySelectorAll && node.querySelectorAll(selector).forEach(scanContainer);
+              if (node.querySelectorAll) {
+                node.querySelectorAll(selector).forEach(container => {
+                  setTimeout(() => scanContainer(container), 100);
+                });
+              }
             } catch (e) {}
           });
         }
       });
+      
+      // Also check for attribute changes that might indicate new ad content
+      if (mutation.type === 'attributes' && mutation.target.nodeType === 1) {
+        if (isAdContainer(mutation.target)) {
+          setTimeout(() => scanContainer(mutation.target), 100);
+        }
+      }
     });
   });
   
-  observer.observe(document.body, { childList: true, subtree: true });
+  observer.observe(document.body, { 
+    childList: true, 
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['aria-label', 'href', 'data-url']
+  });
 }
 
 // Check if element is an ad container
@@ -76,8 +108,14 @@ function scanAdContainers() {
 }
 
 function scanContainer(container) {
-  if (container.dataset.scanned) return;
-  container.dataset.scanned = 'true';
+  // Check if recently scanned (within 2 seconds)
+  const lastScan = scannedContainers.get(container);
+  const now = Date.now();
+  if (lastScan && (now - lastScan) < 2000) return;
+  
+  scannedContainers.set(container, now);
+  
+  let foundAd = false;
   
   // Scan aria-label (your example)
   const ariaLabel = container.getAttribute('aria-label');
@@ -87,10 +125,21 @@ function scanContainer(container) {
       type: 'display-ad',
       source: 'aria-label'
     });
-    return; // Skip text scan if aria-label found
+    foundAd = true;
   }
   
-  // Scan text nodes within container ONLY
+  // Check for data-url attributes
+  const dataUrl = container.getAttribute('data-url') || container.getAttribute('data-ad-url');
+  if (dataUrl && !dataUrl.includes('youtube.com')) {
+    logAd({
+      url: dataUrl,
+      type: 'display-ad',
+      source: 'data-attribute'
+    });
+    foundAd = true;
+  }
+  
+  // Scan text nodes within container ONLY (even if aria-label found, to catch all ads)
   const walker = document.createTreeWalker(
     container,
     NodeFilter.SHOW_TEXT,
@@ -184,6 +233,37 @@ window.fetch = async function(...args) {
     } catch (e) {}
   }
   return originalFetch.apply(this, args);
+};
+
+// Also intercept XMLHttpRequest
+const originalXHROpen = XMLHttpRequest.prototype.open;
+XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+  if (typeof url === 'string') {
+    try {
+      const urlObj = new URL(url, window.location.href);
+      
+      // Check for ad networks
+      if (urlObj.hostname.includes('doubleclick.net') || 
+          urlObj.hostname.includes('googleadservices.com') ||
+          urlObj.hostname.includes('googlesyndication.com') ||
+          url.includes('youtube.com/pagead')) {
+        
+        // Extract destination URL from parameters
+        const destUrl = urlObj.searchParams.get('adurl') || 
+                       urlObj.searchParams.get('url') ||
+                       urlObj.searchParams.get('q');
+        
+        if (destUrl) {
+          logAd({
+            url: destUrl,
+            type: 'network-ad',
+            source: 'xhr-extracted'
+          });
+        }
+      }
+    } catch (e) {}
+  }
+  return originalXHROpen.apply(this, [method, url, ...rest]);
 };
 
 observeWhenReady();
