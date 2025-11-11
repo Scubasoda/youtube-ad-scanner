@@ -1,32 +1,64 @@
 console.log('[SCAM-SCANNER] Focused ad scanner active');
 
-// Only scan these SPECIFIC ad containers - expanded list
+// Expanded ad container selectors - be more aggressive
 const AD_CONTAINERS = [
-  'ytd-promoted-sparkles-web-renderer',  // Display ads
-  'ytd-ad-slot-renderer',                // Banner ads
-  '.video-ads',                          // Video ads
-  '.ytp-ad-module',                      // Ad player module
-  '.ytp-ad-player-overlay',              // Overlay ads
-  '.ytp-ad-avatar-lockup-card',          // Your example's container
-  'ytd-player-ads-overlay',              // Mid-roll ads
-  'ad-slot-renderer',                    // Generic ad slot
-  'ytd-display-ad-renderer',             // Display ad renderer
-  'ytd-promoted-video-renderer',         // Promoted videos
-  'ytd-banner-promo-renderer',           // Banner promos
-  '[id*="ad-"]',                         // Elements with 'ad-' in ID
-  '[class*="-ad-"]',                     // Elements with '-ad-' in class
-  '[class*="ad-container"]',             // Ad container classes
-  'ytd-in-feed-ad-layout-renderer'       // In-feed ads
+  // Video player ads
+  '.video-ads',
+  '.ytp-ad-module',
+  '.ytp-ad-player-overlay',
+  '.ytp-ad-overlay-container',
+  '.ytp-ad-text',
+  '.ytp-ad-image-overlay',
+  'ytd-player-legacy-desktop-watch-ads-renderer',
+  
+  // Display/banner ads
+  'ytd-promoted-sparkles-web-renderer',
+  'ytd-ad-slot-renderer',
+  'ytd-display-ad-renderer',
+  'ytd-banner-promo-renderer',
+  'ytd-statement-banner-renderer',
+  
+  // Promoted content
+  'ytd-promoted-video-renderer',
+  'ytd-compact-promoted-video-renderer',
+  '.ytd-promoted-video-renderer',
+  
+  // In-feed ads
+  'ytd-in-feed-ad-layout-renderer',
+  'ytd-ad-inline-playback-renderer',
+  
+  // Overlay and cards
+  '.ytp-ad-avatar-lockup-card',
+  'ytd-player-ads-overlay',
+  
+  // Generic patterns
+  '[id*="ad-"]',
+  '[id*="ads-"]',
+  '[class*="-ad-"]',
+  '[class*="ad-container"]',
+  '[class*="ad_container"]',
+  'ad-slot-renderer',
+  
+  // Catch-all for any element with ad-related attributes
+  '[data-ad-id]',
+  '[data-ad-slot]',
+  '[data-google-query-id]'
 ];
 
 // Words to EXCLUDE (common UI elements)
-const EXCLUDE_WORDS = ['play', 'plays', 'like', 'likes', 'share', 'save', 'subscribe', 'channel', 'youtube', 'google'];
+const EXCLUDE_WORDS = ['play', 'plays', 'like', 'likes', 'share', 'save', 'subscribe', 'channel', 'youtube', 'google', 'video', 'watch'];
 
-// Valid TLDs for validation
-const VALID_TLDS = ['.com', '.net', '.org', '.io', '.co', '.au', '.uk', '.ca', '.de', '.fr', '.it', '.es', '.nl', '.be', '.ch', '.at', '.nz', '.jp', '.in'];
+// Valid TLDs for validation - expanded list
+const VALID_TLDS = [
+  '.com', '.net', '.org', '.io', '.co', '.au', '.uk', '.ca', '.de', '.fr', 
+  '.it', '.es', '.nl', '.be', '.ch', '.at', '.nz', '.jp', '.in', '.us',
+  '.ai', '.app', '.dev', '.tech', '.online', '.store', '.shop', '.site',
+  '.xyz', '.me', '.tv', '.cc', '.info', '.biz', '.pro', '.ly'
+];
 
 // Track scanned containers with timestamp to allow rescanning
 const scannedContainers = new WeakMap();
+const loggedUrls = new Set(); // Prevent duplicate logs in same session
 
 // Debug mode - set to false to reduce console spam
 const DEBUG = true;
@@ -46,10 +78,15 @@ function startFocusedScanning() {
   // Scan ad containers immediately
   scanAdContainers();
   
-  // Periodic full rescan every 5 seconds to catch missed ads
+  // More frequent rescanning - every 2 seconds
   setInterval(() => {
     scanAdContainers();
-  }, 5000);
+  }, 2000);
+  
+  // Also scan for video ad overlays more aggressively
+  setInterval(() => {
+    scanVideoPlayer();
+  }, 1000);
   
   // Watch for new ad containers
   const observer = new MutationObserver((mutations) => {
@@ -87,7 +124,7 @@ function startFocusedScanning() {
     childList: true, 
     subtree: true,
     attributes: true,
-    attributeFilter: ['aria-label', 'href', 'data-url']
+    attributeFilter: ['aria-label', 'href', 'data-url', 'data-ad-id', 'src']
   });
 }
 
@@ -122,11 +159,58 @@ function scanAdContainers() {
   }
 }
 
+// Special video player ad scanner
+function scanVideoPlayer() {
+  const player = document.querySelector('.html5-video-player');
+  if (!player) return;
+  
+  // Check if ad is playing
+  const adIndicators = [
+    player.classList.contains('ad-showing'),
+    player.classList.contains('ad-interrupting'),
+    player.querySelector('.ytp-ad-text'),
+    player.querySelector('.ytp-ad-skip-button'),
+    player.querySelector('.ytp-ad-preview-container'),
+    document.querySelector('.ytp-ad-player-overlay-layout')
+  ];
+  
+  const isAdPlaying = adIndicators.some(indicator => indicator);
+  
+  if (isAdPlaying) {
+    if (DEBUG) console.log('[SCAM-SCANNER] Video ad detected in player');
+    
+    // Try to extract ad URL from various sources
+    const adTextElements = player.querySelectorAll('.ytp-ad-text, .ytp-ad-visit-advertiser-button');
+    adTextElements.forEach(el => {
+      const text = el.textContent?.trim();
+      if (text && isValidAdDomain(text)) {
+        logAd({
+          url: `https://${text}`,
+          type: 'video-ad',
+          source: 'video-player-text'
+        });
+      }
+    });
+    
+    // Check for click-through links
+    const adLinks = player.querySelectorAll('a[href*="adurl"], a[href*="googleadservices"]');
+    adLinks.forEach(link => {
+      if (link.href) {
+        logAd({
+          url: link.href,
+          type: 'video-ad',
+          source: 'video-player-link'
+        });
+      }
+    });
+  }
+}
+
 function scanContainer(container) {
-  // Check if recently scanned (within 2 seconds)
+  // Check if recently scanned (within 1 second - reduced from 2)
   const lastScan = scannedContainers.get(container);
   const now = Date.now();
-  if (lastScan && (now - lastScan) < 2000) return;
+  if (lastScan && (now - lastScan) < 1000) return;
   
   scannedContainers.set(container, now);
   
@@ -163,6 +247,24 @@ function scanContainer(container) {
     });
     foundAd = true;
   }
+  
+  // Check all image sources (ads often have branded images)
+  const images = container.querySelectorAll('img[src]');
+  images.forEach(img => {
+    const src = img.src;
+    if (src && !src.includes('youtube.com') && !src.includes('ytimg.com') && !src.includes('ggpht.com')) {
+      try {
+        const url = new URL(src);
+        if (DEBUG) console.log('[SCAM-SCANNER] External image found:', url.hostname);
+        logAd({
+          url: src,
+          type: 'display-ad-image',
+          source: 'image-src'
+        });
+        foundAd = true;
+      } catch (e) {}
+    }
+  });
   
   // Scan text nodes within container ONLY (even if aria-label found, to catch all ads)
   const walker = document.createTreeWalker(
@@ -239,6 +341,14 @@ function isValidAdDomain(text) {
 
 // Send to background
 function logAd(adInfo) {
+  // Prevent duplicate logging in same session
+  const urlKey = adInfo.url + adInfo.source;
+  if (loggedUrls.has(urlKey)) {
+    if (DEBUG) console.log('[SCAM-SCANNER] Duplicate ad skipped:', adInfo.url);
+    return;
+  }
+  loggedUrls.add(urlKey);
+  
   console.log('[SCAM-SCANNER] ✓ AD DETECTED:', adInfo);
   chrome.runtime.sendMessage({
     action: 'logAdElement',
