@@ -78,6 +78,46 @@ const loggedUrls = new Set(); // Prevent duplicate logs in same session
 // Debug mode - set to false to reduce console spam
 const DEBUG = true;
 
+// Check if URL should be excluded
+function shouldExcludeUrl(url) {
+  if (!url) return true;
+  
+  try {
+    const urlObj = new URL(url);
+    const hostname = urlObj.hostname.toLowerCase();
+    
+    // Exclude if matches any excluded domain
+    if (EXCLUDE_DOMAINS.some(domain => hostname.includes(domain))) {
+      if (DEBUG) console.log('[SCAM-SCANNER] URL excluded (Google/YouTube):', hostname);
+      return true;
+    }
+    
+    return false;
+  } catch (e) {
+    return true; // Invalid URL
+  }
+}
+
+// Strict domain validation
+function isValidAdDomain(text) {
+  // Must contain a dot
+  if (!text.includes('.')) return false;
+  
+  // Must end with valid TLD (not just any string with dot)
+  if (!VALID_TLDS.some(tld => text.toLowerCase().endsWith(tld))) return false;
+  
+  // Exclude common UI words
+  if (EXCLUDE_WORDS.some(word => text.toLowerCase().includes(word))) return false;
+  
+  // Exclude Google/YouTube domains
+  if (EXCLUDE_DOMAINS.some(domain => text.toLowerCase().includes(domain))) return false;
+  
+  // Must look like a domain (letters/numbers/hyphens only)
+  if (!/^[a-zA-Z0-9.-]+$/.test(text)) return false;
+  
+  return true;
+}
+
 function observeWhenReady() {
   if (document.body) {
     console.log('[SCAM-SCANNER] Document body ready, starting scanner');
@@ -327,28 +367,8 @@ function scanContainer(container) {
   });
   
   if (DEBUG && !foundAd) {
-    console.log('[SCAM-SCANNER] No ads found in this container');
+        console.log('[SCAM-SCANNER] No ads found in this container');
   }
-}
-
-// Strict domain validation
-function isValidAdDomain(text) {
-  // Must contain a dot
-  if (!text.includes('.')) return false;
-  
-  // Must end with valid TLD (not just any string with dot)
-  if (!VALID_TLDS.some(tld => text.toLowerCase().endsWith(tld))) return false;
-  
-  // Exclude common UI words
-  if (EXCLUDE_WORDS.some(word => text.toLowerCase().includes(word))) return false;
-  
-  // Must look like a domain (letters/numbers/hyphens only)
-  if (!/^[a-zA-Z0-9.-]+$/.test(text)) return false;
-  
-  // Exclude YouTube/Google domains
-  if (text.includes('youtube.com') || text.includes('google.com')) return false;
-  
-  return true;
 }
 
 // Send to background
@@ -368,7 +388,7 @@ function logAd(adInfo) {
     timestamp: Date.now()
   }, (response) => {
     if (chrome.runtime.lastError) {
-      console.error('[SCAM-SCANNER] Error sending message:', chrome.runtime.lastError);
+      console.error('[SCAM-SCANNER] Error sending message:', chrome.runtime.lastError.message || chrome.runtime.lastError);
     }
   });
 }
