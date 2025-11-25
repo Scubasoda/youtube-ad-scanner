@@ -1,0 +1,29 @@
+{
+  "name": "youtube-ad-scanner",
+  "version": "1.0.0",
+  "description": "YouTube Ad Scam Scanner - Detects and logs YouTube advertisements",
+  "main": "dist/background.js",
+  "scripts": {
+    "build": "webpack --mode production",
+    "build:dev": "webpack --mode development",
+    "watch": "webpack --watch --mode development",
+    "lint": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "youtube",
+    "ads",
+    "scanner",
+    "browser-extension"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "copy-webpack-plugin": "^11.0.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.3.3",
+    "webpack": "^5.94.0",
+    "webpack-cli": "^5.1.4"
+  }
+}
