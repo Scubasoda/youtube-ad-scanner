@@ -99,6 +99,17 @@ export class SelectorManager {
       { selector: '.ytp-ad-skip-button-container', priority: 2, successRate: 1, failureCount: 0 },
       { selector: '.ytp-ad-preview-container', priority: 3, successRate: 1, failureCount: 0 }
     ]);
+
+    // Mobile YouTube selectors (m.youtube.com)
+    this.addCategory('mobile-ads', [
+      { selector: 'ytm-promoted-sparkles-web-renderer', priority: 1, successRate: 1, failureCount: 0 },
+      { selector: 'ytm-ad-slot-renderer', priority: 2, successRate: 1, failureCount: 0 },
+      { selector: 'ytm-companion-slot', priority: 3, successRate: 1, failureCount: 0 },
+      { selector: 'ytm-promoted-video-renderer', priority: 4, successRate: 1, failureCount: 0 },
+      { selector: 'ytm-in-feed-ad-layout-renderer', priority: 5, successRate: 1, failureCount: 0 },
+      { selector: '.mobile-topbar-header-content', priority: 6, successRate: 0.7, failureCount: 0 },
+      { selector: 'ytm-player-overlay-ads', priority: 7, successRate: 1, failureCount: 0 }
+    ]);
   }
 
   /**

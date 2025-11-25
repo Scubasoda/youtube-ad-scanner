@@ -122,13 +122,11 @@ export class ApiDetectionStep implements DetectionStep {
 
       // Try to access YouTube player API
       try {
-        interface YouTubePlayer extends HTMLElement {
+        // Use type assertion for YouTube player methods
+        const ytPlayer = player as HTMLElement & {
           getAdState?: () => number;
-          getPlayerState?: () => number;
-          getCurrentTime?: () => number;
-        }
+        };
         
-        const ytPlayer = player as YouTubePlayer;
         if (typeof ytPlayer.getAdState === 'function') {
           const adState = ytPlayer.getAdState();
           if (adState === 1) {

@@ -10,6 +10,7 @@ import { adClassifier, shouldExcludeUrl } from '../detection/classifiers';
 import { youtubePlayerAPI } from '../platforms/youtube/player-api';
 import { youtubeUIPatterns } from '../platforms/youtube/ui-patterns';
 import { debounce, performanceTracker } from '../utils/performance';
+import { isAdNetworkUrl, isYouTubePageadUrl, extractDestinationUrl } from '../utils/url';
 
 // Debug mode
 const DEBUG = true;
@@ -214,6 +215,11 @@ const runPipeline = debounce(() => {
 
 /**
  * Setup network interception
+ * Note: Modifying global prototypes (fetch/XMLHttpRequest) is necessary here because:
+ * 1. The webRequest API only intercepts browser-initiated requests, not page-initiated ones
+ * 2. YouTube's ad system uses fetch/XHR to load ad content
+ * 3. This is a common pattern in browser extensions for content script interception
+ * The implementation preserves original functionality and only observes, not blocks.
  */
 function setupNetworkInterception(): void {
   // Intercept fetch
@@ -222,16 +228,9 @@ function setupNetworkInterception(): void {
     const url = args[0];
     if (typeof url === 'string') {
       try {
-        const urlObj = new URL(url);
-        
-        if (urlObj.hostname.includes('doubleclick.net') ||
-            urlObj.hostname.includes('googleadservices.com') ||
-            urlObj.hostname.includes('googlesyndication.com') ||
-            url.includes('youtube.com/pagead')) {
-          
-          const destUrl = urlObj.searchParams.get('adurl') ||
-                         urlObj.searchParams.get('url') ||
-                         urlObj.searchParams.get('q');
+        // Use safe hostname matching instead of substring includes
+        if (isAdNetworkUrl(url) || isYouTubePageadUrl(url)) {
+          const destUrl = extractDestinationUrl(url);
           
           if (destUrl && !shouldExcludeUrl(destUrl)) {
             networkDetectionStep.addDetectedUrl(destUrl);
@@ -256,16 +255,9 @@ function setupNetworkInterception(): void {
   XMLHttpRequest.prototype.open = function(method: string, url: string | URL, async?: boolean, username?: string | null, password?: string | null) {
     if (typeof url === 'string') {
       try {
-        const urlObj = new URL(url, window.location.href);
-        
-        if (urlObj.hostname.includes('doubleclick.net') ||
-            urlObj.hostname.includes('googleadservices.com') ||
-            urlObj.hostname.includes('googlesyndication.com') ||
-            url.includes('youtube.com/pagead')) {
-          
-          const destUrl = urlObj.searchParams.get('adurl') ||
-                         urlObj.searchParams.get('url') ||
-                         urlObj.searchParams.get('q');
+        // Use safe hostname matching instead of substring includes
+        if (isAdNetworkUrl(url) || isYouTubePageadUrl(url)) {
+          const destUrl = extractDestinationUrl(url);
           
           if (destUrl && !shouldExcludeUrl(destUrl)) {
             networkDetectionStep.addDetectedUrl(destUrl);

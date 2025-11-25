@@ -3,7 +3,8 @@
  * Handles ad logging and storage management
  */
 
-import { AdLogEntry, AdInfo, TelemetryData } from '../types';
+import { AdLogEntry, TelemetryData, ExtensionMessage } from '../types';
+import { cleanUrl } from '../utils/url';
 
 // Ad log storage
 let adLog: AdLogEntry[] = [];
@@ -20,52 +21,6 @@ setInterval(() => {
     autoExportLogs();
   }
 }, 5 * 60 * 1000);
-
-/**
- * Clean and normalize a URL
- */
-function cleanUrl(url: string): string | null {
-  try {
-    const urlObj = new URL(url);
-    
-    // Filter out Google ad service domains - extract destination URL if possible
-    if (urlObj.hostname.includes('googleadservices.com') ||
-        urlObj.hostname.includes('doubleclick.net') ||
-        urlObj.hostname.includes('googlesyndication.com')) {
-      
-      // Try to extract actual destination from query params
-      const destUrl = urlObj.searchParams.get('adurl') ||
-                      urlObj.searchParams.get('url') ||
-                      urlObj.searchParams.get('q');
-      
-      if (destUrl) {
-        return cleanUrl(destUrl); // Recursively clean the extracted URL
-      }
-      
-      // If no destination found, return null to skip this URL
-      return null;
-    }
-    
-    // Remove tracking parameters
-    const trackingParams = /^(utm_|fbclid|gclid|_ga|mc_)/i;
-    const cleanParams = new URLSearchParams();
-    
-    for (const [key, value] of urlObj.searchParams) {
-      if (!trackingParams.test(key)) {
-        cleanParams.set(key, value);
-      }
-    }
-    
-    urlObj.search = cleanParams.toString();
-    return urlObj.toString();
-  } catch {
-    // Try to make a valid URL
-    if (url.startsWith('http')) {
-      return url;
-    }
-    return `https://${url}`;
-  }
-}
 
 /**
  * Auto-export logs to file
@@ -114,7 +69,7 @@ function getVideoIdFromUrl(url: string | undefined): string {
  * Handle incoming messages from content scripts
  */
 chrome.runtime.onMessage.addListener((
-  request: { action: string; adInfo?: AdInfo; timestamp?: number },
+  request: ExtensionMessage,
   sender: chrome.runtime.MessageSender,
   sendResponse: (response?: { adLog?: AdLogEntry[]; success?: boolean }) => void
 ) => {
@@ -223,4 +178,4 @@ setInterval(() => {
 }, 60000);
 
 // Expose for testing
-export { cleanUrl, getVideoIdFromUrl, storeTelemetry };
+export { getVideoIdFromUrl, storeTelemetry };
