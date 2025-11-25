@@ -19,6 +19,7 @@
     }
     .meta { font-size: 11px; color: #5f6368; margin-top: 5px; }
     button { width: 100%; padding: 10px; margin-top: 10px; background: #d93025; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    button.secondary { background: #1a73e8; }
   </style>
 </head>
 <body>
@@ -29,7 +30,8 @@
   <div id="adList"></div>
   <div id="no-ads">No ads detected yet.</div>
   <button id="clearBtn">Clear Logs</button>
-  <button id="exportBtn">Export</button>
+  <button id="exportBtn" class="secondary">Export JSON</button>
+  <button id="exportCsvBtn" class="secondary">Export CSV</button>
   <script src="popup.js"></script>
 </body>
 </html>
